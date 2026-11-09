@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vokabel-Memory</title>
+<style>
+:root{
+  --bg:#eef1f6; --ink:#1d2433; --muted:#5d667a; --accent:#2b3a67;
+  --de:#dfe9fb; --en:#fbeec2; --ok:#bfe5c9; --line:#c9d0de; --panel:#fff;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#12161f; --ink:#e9edf5; --muted:#9aa3b8; --accent:#5b73c4;
+  --de:#26365c; --en:#5a4a1a; --ok:#1f5a35; --line:#2c3446; --panel:#1a2030;}
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  padding:env(safe-area-inset-top,0) env(safe-area-inset-right,0) env(safe-area-inset-bottom,0) env(safe-area-inset-left,0);
+  display:flex;flex-direction:column}
+.screen{display:none;flex:1;min-height:0}
+.screen.on{display:flex}
+#start{align-items:center;justify-content:center;padding:16px;overflow:auto}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px;width:100%;max-width:460px}
+h1{margin:0 0 4px;font-size:1.6rem}
+p{color:var(--muted);margin:0 0 18px;line-height:1.45}
+label{display:block;font-weight:600;margin:16px 0 6px}
+input[type=file],input[type=number]{width:100%;font-size:1rem;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+button{font:inherit;font-weight:600;border:0;border-radius:10px;padding:12px 18px;background:var(--accent);color:#fff;cursor:pointer;min-height:44px}
+button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+button:disabled{opacity:.45;cursor:default}
+button:focus-visible,input:focus-visible{outline:3px solid #f0a020;outline-offset:2px}
+.row{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap}
+#info{margin-top:8px;font-size:.95rem;color:var(--muted);min-height:1.3em}
+#err{color:#c0392b;margin-top:8px;font-size:.95rem}
+#game{flex-direction:column}
+#bar{display:flex;gap:14px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+#bar .stat{font-variant-numeric:tabular-nums;color:var(--muted)}
+#bar .stat b{color:var(--ink)}
+#bar .sp{flex:1}
+#bar button{padding:8px 14px;min-height:38px}
+#board{flex:1;min-height:0;display:grid;gap:8px;padding:10px;justify-content:center;align-content:center}
+.card{perspective:700px;cursor:pointer;border:0;padding:0;background:none;min-width:0;min-height:0}
+.inner{position:relative;width:100%;height:100%;transition:transform .35s;transform-style:preserve-3d}
+.card.up .inner,.card.done .inner{transform:rotateY(180deg)}
+.face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;text-align:center;padding:6px;overflow:hidden;
+  overflow-wrap:anywhere;hyphens:auto;font-weight:600;line-height:1.2;color:var(--ink)}
+.back{background:var(--accent);background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.09) 0 6px,transparent 6px 12px)}
+.front{transform:rotateY(180deg);border:2px solid var(--line)}
+.card.de .front{background:var(--de)}
+.card.en .front{background:var(--en)}
+.card.done .front{background:var(--ok);border-color:#3c9a5c}
+.card.done{cursor:default}
+.lang{position:absolute;top:4px;left:6px;font-size:.65rem;font-weight:700;opacity:.55}
+#end{align-items:center;justify-content:center;padding:16px}
+#end .panel{text-align:center}
+@media (prefers-reduced-motion:reduce){.inner{transition:none}}
+</style>
+</head>
+<body>
+
+<section id="start" class="screen on">
+  <div class="panel">
+    <h1>Vokabel-Memory</h1>
+    <p>Finde zu jedem deutschen Begriff den passenden englischen.</p>
+    <label for="file">Vokabeldatei (CSV)</label>
+    <input id="file" type="file" accept=".csv,.txt,text/csv,text/plain">
+    <div id="info"></div>
+    <label for="count">Anzahl Karten</label>
+    <input id="count" type="number" inputmode="numeric" min="4" step="2" value="16" disabled>
+    <div id="err" role="alert"></div>
+    <div class="row">
+      <button id="go" disabled>Spiel starten</button>
+      <button id="demo" class="ghost">Beispiel laden</button>
+    </div>
+  </div>
+</section>
+
+<section id="game" class="screen">
+  <div id="bar">
+    <span class="stat">Züge: <b id="moves">0</b></span>
+    <span class="stat">Paare: <b id="pairs">0</b>/<b id="total">0</b></span>
+    <span class="stat">Zeit: <b id="time">0:00</b></span>
+    <span class="sp"></span>
+    <button id="restart" class="ghost">Neu mischen</button>
+    <button id="menu" class="ghost">Menü</button>
+  </div>
+  <div id="board"></div>
+</section>
+
+<section id="end" class="screen">
+  <div class="panel">
+    <h1>Geschafft!</h1>
+    <p id="result"></p>
+    <div class="row" style="justify-content:center">
+      <button id="again">Nochmal</button>
+      <button id="menu2" class="ghost">Menü</button>
+    </div>
+  </div>
+</section>
+
+<script>
+(function(){
+  var $ = function(id){return document.getElementById(id)};
+  var vocab = [];           // [{de, en}]
+  var STORE = 'vokabel-memory-csv';
+  var timer = null, t0 = 0, first = null, lock = false, moves = 0, found = 0, nPairs = 0;
+
+  function show(id){
+    ['start','game','end'].forEach(function(s){$(s).classList.toggle('on', s === id)});
+  }
+
+  /* ---------- CSV ---------- */
+  function parseCSV(text){
+    text = text.replace(/^\uFEFF/, '');
+    var firstLine = text.split(/\r?\n/).find(function(l){return l.trim()}) || '';
+    var counts = {';':0, ',':0, '\t':0};
+    for (var i = 0; i < firstLine.length; i++) if (firstLine[i] in counts) counts[firstLine[i]]++;
+    var delim = Object.keys(counts).sort(function(a,b){return counts[b]-counts[a]})[0];
+    if (!counts[delim]) delim = ';';
+    var rows = [], row = [], cell = '', q = false;
+    for (var k = 0; k < text.length; k++){
+      var c = text[k];
+      if (q){
+        if (c === '"'){ if (text[k+1] === '"'){cell += '"'; k++} else q = false }
+        else cell += c;
+      } else if (c === '"') q = true;
+      else if (c === delim){ row.push(cell); cell = '' }
+      else if (c === '\n' || c === '\r'){
+        if (c === '\r' && text[k+1] === '\n') k++;
+        row.push(cell); cell = ''; rows.push(row); row = [];
+      } else cell += c;
+    }
+    if (cell !== '' || row.length){ row.push(cell); rows.push(row) }
+    var out = [];
+    rows.forEach(function(r){
+      var de = (r[0] || '').trim(), en = (r[1] || '').trim();
+      if (de && en) out.push({de: de, en: en});
+    });
+    return out;
+  }
+
+  function loadText(text, label){
+    $('err').textContent = '';
+    var v = parseCSV(text);
+    if (v.length < 2){
+      vocab = [];
+      $('info').textContent = '';
+      $('err').textContent = 'Keine brauchbaren Zeilen gefunden. Erwartet wird: deutsch;englisch (eine Zeile pro Paar).';
+      $('count').disabled = true; $('go').disabled = true;
+      return;
+    }
+    vocab = v;
+    var max = v.length * 2;
+    $('info').textContent = label + ': ' + v.length + ' Vokabelpaare';
+    $('count').disabled = false;
+    $('count').max = max;
+    if (+$('count').value > max || +$('count').value < 4) $('count').value = Math.min(16, max);
+    $('go').disabled = false;
+    try { localStorage.setItem(STORE, text) } catch(e){}
+  }
+
+  $('file').addEventListener('change', function(e){
+    var f = e.target.files[0];
+    if (!f) return;
+    var r = new FileReader();
+    r.onload = function(){ loadText(String(r.result), f.name) };
+    r.onerror = function(){ $('err').textContent = 'Datei konnte nicht gelesen werden.' };
+    r.readAsText(f, 'UTF-8');
+  });
+
+  $('demo').addEventListener('click', function(){
+    loadText('Baum;tree\nHaus;house\nAuto;car\nBuch;book\nTisch;table\nStuhl;chair\nFenster;window\nTür;door\n' +
+      'Hund;dog\nKatze;cat\nWasser;water\nBrot;bread\nMilch;milk\nApfel;apple\nSchule;school\nFreund;friend\n' +
+      'sich erinnern;to remember\nEntschuldigung;excuse me\nGute Nacht;good night\nWie spät ist es?;what time is it?', 'Beispiel');
+  });
+
+  /* ---------- Spiel ---------- */
+  function shuffle(a){
+    for (var i = a.length - 1; i > 0; i--){
+      var j = Math.floor(Math.random() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+
+  function fmt(s){ return Math.floor(s/60) + ':' + ('0' + (s % 60)).slice(-2) }
+
+  function layout(){
+    var b = $('board'), n = b.children.length;
+    if (!n) return;
+    var W = b.clientWidth - 20, H = b.clientHeight - 20, gap = 8, best = null;
+    for (var cols = 1; cols <= n; cols++){
+      var rows = Math.ceil(n / cols);
+      var w = (W - gap * (cols - 1)) / cols, h = (H - gap * (rows - 1)) / rows;
+      var ratio = 1.35;                       // Breite : Höhe, bevorzugt leicht quer
+      var cw = Math.min(w, h * ratio), ch = cw / ratio;
+      if (ch > h){ ch = h; cw = h * ratio }
+      var area = cw * ch;
+      if (!best || area > best.area) best = {cols: cols, cw: cw, ch: ch, area: area};
+    }
+    b.style.gridTemplateColumns = 'repeat(' + best.cols + ', ' + Math.floor(best.cw) + 'px)';
+    b.style.gridAutoRows = Math.floor(best.ch) + 'px';
+    var fs = Math.max(11, Math.min(26, best.ch / 4.2));
+    b.style.fontSize = fs + 'px';
+  }
+
+  function start(){
+    var want = Math.round(+$('count').value);
+    var maxCards = vocab.length * 2;
+    if (!(want >= 4)) want = 4;
+    if (want > maxCards) want = maxCards;
+    if (want % 2) want -= 1;
+    $('count').value = want;
+    nPairs = want / 2;
+
+    var chosen = shuffle(vocab.slice()).slice(0, nPairs), cards = [];
+    chosen.forEach(function(v, i){
+      cards.push({id: i, lang: 'de', text: v.de});
+      cards.push({id: i, lang: 'en', text: v.en});
+    });
+    shuffle(cards);
+
+    var b = $('board'); b.innerHTML = '';
+    cards.forEach(function(c){
+      var el = document.createElement('button');
+      el.type = 'button';
+      el.className = 'card ' + c.lang;
+      el.setAttribute('aria-label', 'Karte umdrehen');
+      el.dataset.id = c.id;
+      var inner = document.createElement('div'); inner.className = 'inner';
+      var back = document.createElement('div'); back.className = 'face back';
+      var front = document.createElement('div'); front.className = 'face front';
+      var tag = document.createElement('span'); tag.className = 'lang'; tag.textContent = c.lang === 'de' ? 'DE' : 'EN';
+      var txt = document.createElement('span'); txt.textContent = c.text;
+      front.appendChild(tag); front.appendChild(txt);
+      inner.appendChild(back); inner.appendChild(front); el.appendChild(inner);
+      el.addEventListener('click', function(){ flip(el) });
+      b.appendChild(el);
+    });
+
+    first = null; lock = false; moves = 0; found = 0;
+    $('moves').textContent = 0; $('pairs').textContent = 0; $('total').textContent = nPairs; $('time').textContent = '0:00';
+    clearInterval(timer); t0 = Date.now();
+    timer = setInterval(function(){ $('time').textContent = fmt(Math.floor((Date.now() - t0) / 1000)) }, 500);
+    show('game');
+    layout();
+  }
+
+  function flip(el){
+    if (lock || el.classList.contains('up') || el.classList.contains('done')) return;
+    el.classList.add('up');
+    if (!first){ first = el; return; }
+    moves++; $('moves').textContent = moves;
+    var a = first, b = el; first = null;
+    if (a.dataset.id === b.dataset.id && a.classList.contains('de') !== b.classList.contains('de')){
+      [a, b].forEach(function(x){ x.classList.remove('up'); x.classList.add('done') });
+      found++; $('pairs').textContent = found;
+      if (found === nPairs) finish();
+    } else {
+      lock = true;
+      setTimeout(function(){
+        a.classList.remove('up'); b.classList.remove('up'); lock = false;
+      }, 1100);
+    }
+  }
+
+  function finish(){
+    clearInterval(timer);
+    var s = Math.floor((Date.now() - t0) / 1000);
+    $('result').textContent = nPairs + ' Paare in ' + moves + ' Zügen und ' + fmt(s) + ' Minuten.';
+    setTimeout(function(){ show('end') }, 700);
+  }
+
+  function toMenu(){ clearInterval(timer); show('start') }
+
+  $('go').addEventListener('click', start);
+  $('count').addEventListener('keydown', function(e){ if (e.key === 'Enter' && !$('go').disabled) start() });
+  $('restart').addEventListener('click', start);
+  $('again').addEventListener('click', start);
+  $('menu').addEventListener('click', toMenu);
+  $('menu2').addEventListener('click', toMenu);
+  window.addEventListener('resize', layout);
+  window.addEventListener('orientationchange', function(){ setTimeout(layout, 200) });
+
+  // zuletzt geladene Datei wiederverwenden
+  try {
+    var saved = localStorage.getItem(STORE);
+    if (saved) loadText(saved, 'Zuletzt geladene Datei');
+  } catch(e){}
+})();
+</script>
+</body>
+</html>
